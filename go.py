@@ -2,7 +2,7 @@ from collections import namedtuple
 import enum
 import copy
 
-
+#checked
 class Island():                                        
     def __init__(self, color, stones, liberties):
         self.color = color
