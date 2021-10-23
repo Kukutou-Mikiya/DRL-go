@@ -45,10 +45,24 @@ class Point(namedtuple('Point', 'row col')):
 
 class Board():                                
     def __init__(self, size):
-        self.size = size
-        #self.player = player
+        self.size = size        
         self.stone_island_dict = {}
         self.eat_flag = False
+        
+    def set_board(self, player, previous, board):
+        self.player = player
+        print(board)
+        self.previous_board = Board(len(board))
+        for i in range(self.size):
+            for j in range(self.size):
+                if board[i][j] == 1:
+                    self.place_stone(1, Point(i, j))
+                if board[i][j] == 2:
+                    self.place_stone(2, Point(i, j))    
+                if previous[i][j] == 1:
+                    self.previous_board.place_stone(1, Point(i, j))
+                if previous[i][j] == 2:
+                    self.previous_board.place_stone(2, Point(i, j))
 
     def place_stone(self, player, point):
         if not self.boundary_check(point):
@@ -81,13 +95,15 @@ class Board():
                 self.eat_flag = True
                 self._remove_string(other_color_string)
 
-    def apply_move(self, player, point):
+    def apply_move(self, point):
         if point == 'PASS':
-            next_board = self
+            next_board = copy.deepcopy(self)
         else:
             next_board = copy.deepcopy(self)
             next_board.eat_flag = False
-            next_board.place_stone(player, point)
+            next_board.place_stone(self.player, point)
+        next_board.player = 3 - next_board.player
+        next_board.previous_board = self
         return next_board
 
     def is_place_self_capture(self, player, point):
@@ -106,16 +122,17 @@ class Board():
 
     def is_valid_place(self, player, point):
         return (
-            self.board.get(point) is None and
-            not self.is_move_self_capture(player, point) and
+            self.get_color(point) is None and
+            not self.is_place_self_capture(player, point) and
             not self.does_move_violate_ko(player, point))
 
     def legal_moves(self):
         moves = []
-        for row in range(0, self.board.size):
-            for col in range(0, self.board.size):
+        for row in range(0, self.size):
+            for col in range(0, self.size):
                 if self.is_valid_place(self.player, Point(row, col)):
                     moves.append(Point(row, col))
+        moves = self.order_moves(self.average_center(), moves)
         moves.append('PASS')
         return moves
 
@@ -138,9 +155,31 @@ class Board():
         cnt = 0
         for i in self.stone_island_dict.keys():
             if self.get_color(i) == player:
-                print(self.get_color(i))
+                #print(self.get_color(i))
                 cnt+=1
         return cnt 
+
+    def average_center(self):
+        x_average = 0
+        y_average = 0
+        count = 0
+        for i in self.stone_island_dict.keys():
+            if self.stone_island_dict[i] is not None:
+                count += 1
+                x_average += i.col
+                y_average += i.row
+        return (x_average/count, y_average/count)
+
+    def order_moves(self, average_point, legal_moves):
+        order_moves = []
+        for i in legal_moves:
+            order_moves.append((self.cal_dis(average_point,i),i))
+        order_moves.sort(key = lambda x:x[0])
+        order_moves = [i[1] for i in order_moves]
+        return order_moves[:10]
+
+    def cal_dis(self, point1, point2):
+        return (point1[0]-point2[0])**2 + (point1[1]-point2[1])**2
 
     def _remove_string(self, island):
         for point in island.stones:
@@ -155,4 +194,5 @@ class Board():
     def __eq__(self, other):
         return isinstance(other, Board) and \
             self.size == other.size and \
-            self._grid == other._grid
+            self.stone_island_dict == other.stone_island_dict
+

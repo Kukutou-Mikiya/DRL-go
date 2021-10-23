@@ -3,6 +3,8 @@ import unittest
 import six
 import enum
 from go import Board, Point
+from my_player import AlphaBetaAgent
+from write import writeOutput
 class Player(enum.Enum):
     black = 1
     white = 2
@@ -11,6 +13,24 @@ class Player(enum.Enum):
     def other(self):
         return Player.black if self == Player.white else Player.white
 
+
+COLS = 'ABCDEFGHJKLMNOPQRST'
+STONE_TO_CHAR = {
+    None: ' . ',
+    1: ' x ',
+    2: ' o ',
+}
+
+
+def print_board(board):
+    for row in range(board.size-1, -1, -1):
+        bump = " " if row <= 9 else ""
+        line = []
+        for col in range(0, board.size):
+            stone = board.get_color(Point(row=row, col=col))
+            line.append(STONE_TO_CHAR[stone])
+        print('%s%d %s' % (bump, row, ''.join(line)))
+    print('    ' + '  '.join(COLS[:board.size]))
 
 class BoardTest(unittest.TestCase):
     def test_capture(self):
@@ -131,6 +151,22 @@ class BoardTest(unittest.TestCase):
 
         self.assertEqual(board.score(1),2)
         self.assertEqual(board.score(2),3)
+
+class AgentTest(unittest.TestCase):
+    def test_moves(self):
+        # ooo..
+        # x.x..
+        board = Board(5)
+        board.player = 1
+        board.place_stone(1, Point(0, 0))
+        board.place_stone(1, Point(0, 2))
+        board.place_stone(2, Point(1, 0))
+        board.place_stone(2, Point(1, 2))
+        board.place_stone(2, Point(1, 1))
+        player = AlphaBetaAgent(2)
+        move = player.select_move(board)
+        writeOutput(move)
+
 '''
 class GameTest(unittest.TestCase):
     def test_new_game(self):
@@ -144,3 +180,4 @@ class GameTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
