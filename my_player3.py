@@ -1,12 +1,12 @@
 import random
 import sys
-#from read import readInput
-from write import writeOutput
-from go import Board, Point
+#from write import writeOutput
+from go import Board
+from point import Point
+MAX_SCORE = 9999
+MIN_SCORE = -9999
 
-MAX_SCORE = 999999
-MIN_SCORE = -999999
-
+# reference the sample code provided by 561
 def readInput(n, path="input.txt"):
 
     with open(path, 'r') as f:
@@ -16,10 +16,71 @@ def readInput(n, path="input.txt"):
 
         previous_board = [[int(x) for x in line.rstrip('\n')] for line in lines[1:n+1]]
         board = [[int(x) for x in line.rstrip('\n')] for line in lines[n+1: 2*n+1]]
-        print('board')
-        print(board)
+
         return player, previous_board, board
 
+# reference the sample code provided by 561
+def writeOutput(result, path="output.txt"):
+    res = ""
+    if result == "PASS":
+        res = "PASS"
+    else:
+        res += str(result[0]) + ',' + str(result[1])
+
+    with open(path, 'w') as f:
+        f.write(res)
+
+def remove_edge(moves):
+    for i in range(len(moves)):
+        if moves[i][0] != 0 and moves[i][0] != 4 and moves[i][1] != 0 and moves[i][1] != 4:
+            return moves[i]
+    return moves[0]
+
+'''
+def second_heuristic(moves,board):
+    if len(moves) == 0:
+        return []
+    liberty_lost = []
+    for i in range(len(moves)):
+        adjacent_opposite_color = []
+        if moves[i] == 'PASS':
+            liberty_lost.append((moves[i], 0))
+        else:
+            for neighbor in moves[i].neighbors():           
+                if not board.boundary_check(neighbor):
+                    continue
+                neighbor_island = board.stone_island_dict.get(neighbor)
+                if neighbor_island is not None and neighbor_island.color == 3 - board.player:
+                    if neighbor_island not in adjacent_opposite_color:
+                        adjacent_opposite_color.append(neighbor_island)
+            liberty_lost.append((moves[i],len(adjacent_opposite_color)))
+    liberty_lost.sort(key=lambda x: x[1])
+    liberty_lost.reverse()
+    max_lost = liberty_lost[0][1]
+    for i in range(len(liberty_lost)):
+        if liberty_lost[i][1] < max_lost:
+            return [x[0] for x in liberty_lost[:i]]
+    return [x[0] for x in liberty_lost]
+'''
+def second_heuristic(moves,board):
+    if len(moves) == 0:
+        return []
+    liberty_lost = []
+    for i in range(len(moves)):
+        adjacent_opposite_color = []
+        if moves[i] == 'PASS':
+            liberty_lost.append(0)
+        else:
+            for neighbor in moves[i].neighbors():           
+                if not board.boundary_check(neighbor):
+                    continue
+                neighbor_island = board.stone_island_dict.get(neighbor)
+                if neighbor_island is not None and neighbor_island.color == 3 - board.player:
+                    if neighbor_island not in adjacent_opposite_color:
+                        adjacent_opposite_color.append(neighbor_island)
+            liberty_lost.append(len(adjacent_opposite_color))
+    max_index = liberty_lost.index(max(liberty_lost))
+    return moves[max_index]
 
 class AlphaBetaAgent():
     def __init__(self, max_depth):
@@ -28,79 +89,71 @@ class AlphaBetaAgent():
     def select_move(self, board):
         best_moves = []
         best_score = None
-        best_black = MIN_SCORE
-        best_white = MIN_SCORE
-        # Loop over all legal moves.
+        alpha_black = MIN_SCORE
+        alpha_white = MIN_SCORE
+
         for possible_move in board.legal_moves():
-            # Calculate the game state if we select this move.
-            next_state = board.apply_move(possible_move)
-            # Since our opponent plays next, figure out their best
-            # possible outcome from there.
-            opponent_best_outcome = alpha_beta_result(
-                next_state, self.max_depth,
-                best_black, best_white,)
-            print(possible_move,-1 * opponent_best_outcome)
-            # Our outcome is the opposite of our opponent's outcome.
-            our_best_outcome = -1 * opponent_best_outcome
-            if (not best_moves) or our_best_outcome > best_score:
-                # This is the best move so far.
+
+            next_board = board.apply_move(possible_move)
+
+            oppo_score = alpha_beta_result(
+                next_board, self.max_depth,
+                alpha_black, alpha_white,)
+
+            current_best = -1 * oppo_score
+
+            if (not best_moves) or current_best > best_score:
+
                 best_moves = [possible_move]
-                best_score = our_best_outcome
+                best_score = current_best
                 if board.player == 1:
-                    best_black = best_score
+                    alpha_black = best_score
                 elif board.player == 2:
-                    best_white = best_score
-            elif our_best_outcome == best_score:
-                # This is as good as our previous best move.
+                    alpha_white = best_score
+            elif current_best == best_score:
+
                 best_moves.append(possible_move)
-        #print(best_moves)
-        # For variety, randomly select among all equally good moves.
-        return random.choice(best_moves)
+        
+        #best_move = remove_edge(best_moves)        
+        best_move = second_heuristic(best_moves,board)
+        
+        return best_move
 
-#checked
-# tag::alpha-beta-prune-1[]
-def alpha_beta_result(board, max_depth, best_black, best_white):
+
+def alpha_beta_result(board, max_depth, alpha_black, alpha_white):
     if max_depth == 0:
-        #print_board(board)
-        #print('score for player',board.player)
-        #print(capture_diff(board))                                     # <2>
-        return capture_diff(board)                             # <2>
+        return cal_score(board)                             
 
-    best_so_far = MIN_SCORE
-    for candidate_move in board.legal_moves():            # <3>
-        next_board = board.apply_move(candidate_move)     # <4>
-        opponent_best_result = alpha_beta_result(              # <5>
-            next_board, max_depth - 1,                         # <5>
-            best_black, best_white,                            # <5>
-            )                                           # <5>
-        our_result = -1 * opponent_best_result                 # <6>
+    current_score = MIN_SCORE
+    for candidate_move in board.legal_moves():            
+        next_board = board.apply_move(candidate_move)     
+        opponent_best_result = alpha_beta_result(              
+            next_board, max_depth - 1,                         
+            alpha_black, alpha_white,                            
+            )                                          
+        our_result = -1 * opponent_best_result                 
 
-        if our_result > best_so_far:                           # <7>
-            best_so_far = our_result                           # <7>
-# end::alpha-beta-prune-1[]
+        if our_result > current_score:                           
+            current_score = our_result                           
 
-# tag::alpha-beta-prune-2[]
         if board.player == 2:
-            if best_so_far > best_white:                       # <8>
-                best_white = best_so_far                       # <8>
-            outcome_for_black = -1 * best_so_far               # <9>
-            if outcome_for_black < best_black:                 # <9>
-                return best_so_far                             # <9>
-# end::alpha-beta-prune-2[]
-# tag::alpha-beta-prune-3[]
+            if current_score > alpha_white:                       
+                alpha_white = current_score                       
+            outcome_for_black = -1 * current_score               
+            if outcome_for_black < alpha_black:                 
+                return current_score                             
+
         elif board.player == 1:
-            if best_so_far > best_black:                       # <10>
-                best_black = best_so_far                       # <10>
-            outcome_for_white = -1 * best_so_far               # <11>
-            if outcome_for_white < best_white:                 # <11>
-                return best_so_far                             # <11>
-# end::alpha-beta-prune-3[]
-# tag::alpha-beta-prune-4[]
+            if current_score > alpha_black:                       
+                alpha_black = current_score                       
+            outcome_for_white = -1 * current_score               
+            if outcome_for_white < alpha_white:                 
+                return current_score                             
 
-    return best_so_far
-# end::alpha-beta-prune-4[]
+    return current_score
 
-def capture_diff(board):
+
+def cal_score(board):
     black_stones = 0
     white_stones = 0
     for r in range(0, board.size):
@@ -111,10 +164,30 @@ def capture_diff(board):
                 black_stones += 1
             elif color == 2:
                 white_stones += 1
-    diff = black_stones - white_stones                    # <1>
-    if board.player == 1:    # <2>
-        return diff                                       # <2>
-    return -1 * diff                                      # <3>
+    diff = black_stones - white_stones                    
+    if board.player == 1:    
+        return diff                                       
+    return -1 * diff                                      
+
+
+def init_step(player, path="step.txt"):
+    if player == 1:
+        with open(path, 'w') as f:
+            f.write(str(1))
+        return 1    
+    else:
+        with open(path, 'w') as f:
+            f.write(str(2))
+        return 2 
+
+
+def readStep(path="step.txt"):
+    with open(path, 'r') as f:
+        lines = f.readlines()
+        step = int(lines[0])
+    with open(path, 'w') as f:
+        f.write(str(step+2))            
+    return step+2
 
 
 if __name__ == "__main__":
@@ -122,26 +195,16 @@ if __name__ == "__main__":
     player, previous_board, current_board = readInput(N)
     board = Board(N)
     board.set_board(player, previous_board, current_board)
-    player = AlphaBetaAgent(2)
-    action = player.select_move(board)
+    if len(board.stone_island_dict) <= 1:
+        step = init_step(player)
+    else:
+        step = readStep()
+    depth = min(24-step, 3)
+    if step != 1:
+        player = AlphaBetaAgent(depth)
+        action = player.select_move(board)
+    else:
+        action = Point(2, 2)
     writeOutput(action)
 
-COLS = 'ABCDEFGHJKLMNOPQRST'
-STONE_TO_CHAR = {
-    None: ' . ',
-    1: ' x ',
-    2: ' o ',
-}
 
-
-
-
-def print_board(board):
-    for row in range(board.size-1, -1, -1):
-        bump = " " if row <= 9 else ""
-        line = []
-        for col in range(0, board.size):
-            stone = board.get_color(Point(row=row, col=col))
-            line.append(STONE_TO_CHAR[stone])
-        print('%s%d %s' % (bump, row, ''.join(line)))
-    print('    ' + '  '.join(COLS[:board.size]))
